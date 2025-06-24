@@ -1,64 +1,38 @@
 {
-  "name": "lms-backend",
+  "name": "lms-server",
   "version": "1.0.0",
-  "description": "Learning Management System Backend API",
+  "description": "LMS Server",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write ."
+    "dev": "nodemon server.js"
   },
-  "keywords": [
-    "lms",
-    "education",
-    "api",
-    "nodejs",
-    "express",
-    "postgresql"
-  ],
-  "author": "LMS Development Team",
-  "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
+    "bcryptjs": "^3.0.2",
+    "cloudinary": "^1.41.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "dotenv": "^16.3.1",
-    "pg": "^8.11.3",
-    "knex": "^3.0.1",
-    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "express-validator": "^7.2.1",
+    "handlebars": "^4.7.8",
+    "helmet": "^8.1.0",
+    "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary": "^4.0.0",
+    "nodemailer": "^6.9.9",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "passport-jwt": "^4.0.1",
-    "joi": "^17.11.0",
-    "multer": "^1.4.5-lts.1",
-    "cloudinary": "^1.41.0",
-    "nodemailer": "^6.9.7",
-    "winston": "^3.11.0",
-    "json2csv": "^5.0.7",
-    "exceljs": "^4.4.0",
-    "uuid": "^9.0.1",
-    "moment": "^2.29.4",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0"
+    "pg": "^8.16.0",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.7"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
-    "jest": "^29.7.0",
-    "supertest": "^6.3.3",
-    "eslint": "^8.54.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-node": "^11.1.0",
-    "prettier": "^3.1.0"
-  },
-  "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
+    "nodemon": "^3.0.1"
   }
 }
