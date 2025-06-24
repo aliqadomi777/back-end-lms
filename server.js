@@ -1,70 +1,33 @@
-/**
- * LMS Backend Server Entry Point
- *
- * This file initializes and starts the Express server with all necessary
- * configurations including database connection, middleware, and routes.
- */
 
-import "dotenv/config";
-import app from "./app.js";
-import db from "./config/database.js";
+import app from './app.js';
+import dotenv from 'dotenv';
+import { testConnection } from './config/db.js';
+import { setupGlobalErrorHandlers } from './middleware/errorHandler.js';
 
-const PORT = process.env.PORT || 3000;
-const NODE_ENV = process.env.NODE_ENV || "development";
+dotenv.config();
+// Remove this line: app.use(express.json());
+// Setup global error handlers for uncaught exceptions and unhandled rejections
+setupGlobalErrorHandlers();
 
-/**
- * Start the server
- */
-async function startServer() {
-  try {
-    // Test database connection
-    await db.raw("SELECT 1");
-    console.log("✅ Database connection established successfully");
+const PORT = process.env.PORT || 5000;
+const ENV = process.env.NODE_ENV || 'development';
 
-    // Start HTTP server
-    const server = app.listen(PORT, () => {
-      console.log(`🚀 LMS Backend Server running on port ${PORT}`);
-      console.log(`📊 Environment: ${NODE_ENV}`);
-      console.log(`🔗 API Documentation: http://localhost:${PORT}/api-docs`);
-
-      if (NODE_ENV === "development") {
-        console.log(`🌐 Server URL: http://localhost:${PORT}`);
-      }
+// Test database connection before starting the server
+testConnection()
+  .then(() => {
+    const server = app.listen(PORT, () => {  // ✅ Now 'app' is defined
+      console.log(`Server running in ${ENV} mode on port ${PORT}`);
     });
 
-    // Graceful shutdown handling
-    process.on("SIGTERM", () => {
-      console.log("SIGTERM received. Shutting down gracefully...");
+    // Handle server shutdown gracefully
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received. Shutting down gracefully...');
       server.close(() => {
-        console.log("Process terminated");
-        process.exit(0);
+        console.log('Process terminated!');
       });
     });
-
-    process.on("SIGINT", () => {
-      console.log("SIGINT received. Shutting down gracefully...");
-      server.close(() => {
-        console.log("Process terminated");
-        process.exit(0);
-      });
-    });
-  } catch (error) {
-    console.error("❌ Failed to start server:", error);
+  })
+  .catch(err => {
+    console.error('Failed to start server:', err.message);
     process.exit(1);
-  }
-}
-
-// Handle uncaught exceptions
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
-  process.exit(1);
-});
-
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
-  process.exit(1);
-});
-
-// Start the server
-startServer();
+  });

@@ -1,177 +1,142 @@
-/**
- * LMS Backend Express Application Configuration
- *
- * This file sets up the Express application with all middleware,
- * security configurations, routes, and error handling.
- */
-
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import morgan from "morgan";
+import passport from "./config/passport.js";
+import session from "express-session";
 import rateLimit from "express-rate-limit";
-import path from "path";
-import { fileURLToPath } from "url";
-import passport from "passport";
-
-// Import middleware
-import errorMiddleware from "./middleware/error.middleware.js";
-import notFoundHandler from "./middleware/notFound.middleware.js";
-import requestLogger from "./middleware/requestLogger.middleware.js";
-
-const { errorHandler } = errorMiddleware;
-
-// Import routes
-import authRoutes from "./routes/auth.routes.js";
-import usersRoutes from "./routes/users.routes.js";
-import coursesRoutes from "./routes/courses.routes.js";
-import modulesRoutes from "./routes/modules.routes.js";
-import lessonsRoutes from "./routes/lessons.routes.js";
-import quizzesRoutes from "./routes/quizzes.routes.js";
-import quizAttemptRoutes from "./routes/quiz-attempt.routes.js";
-import assignmentsRoutes from "./routes/assignments.routes.js";
-import enrollmentsRoutes from "./routes/enrollments.routes.js";
-import categoryRoutes from "./routes/category.routes.js";
-import analyticsRoutes from "./routes/analytics.routes.js";
-import assignmentSubmissionRoutes from "./routes/assignment-submission.routes.js";
+import routes from "./routes/index.js";
+import { errorHandler, notFound, handleRateLimitError } from "./middleware/errorHandler.js";
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 
-// ============================================================================
-// SECURITY MIDDLEWARE
-// ============================================================================
+// ======================
+// Logging Helper
+// ======================
+const logHttpRequest = (req, res, duration) => {
+  const logData = {
+    method: req.method,
+    url: req.originalUrl,
+    status: res.statusCode,
+    responseTime: `${duration}ms`,
+    userAgent: req.get('User-Agent') || 'Unknown',
+    ip: req.ip || req.connection.remoteAddress
+  };
 
-// Helmet for security headers
+  // Skip logging for static assets
+  if (!req.originalUrl.match(/\.(png|jpg|jpeg|gif|css|js|ico|svg|woff|woff2|ttf|eot)$/)) {
+    // Request logging removed for production
+  }
+};
+
+// ======================
+// Security Middleware
+// ======================
+app.set('etag', process.env.NODE_ENV === 'production' ? 'strong' : false);
+
 app.use(
-  helmet({
-    crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
-      },
-    },
+  cors({
+    origin: process.env.CORS_ORIGIN || ["http://localhost:3000", "http://localhost:3001"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
   })
 );
 
-// CORS configuration
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      process.env.FRONTEND_URL,
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://127.0.0.1:3000",
-      "http://127.0.0.1:3001",
-    ];
-
-    // Allow requests with no origin (mobile apps, etc.)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", ...(process.env.NODE_ENV === 'development' ? ["'unsafe-eval'"] : [])],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", process.env.API_BASE_URL || ""]
     }
   },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-};
+  crossOriginEmbedderPolicy: process.env.NODE_ENV === 'production',
+  xssFilter: true,
+  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 63072000 } : false
+}));
 
-app.use(cors(corsOptions));
-
-// Rate limiting
+// ======================
+// Request Handling
+// ======================
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: "Too many requests from this IP, please try again later.",
-    retryAfter: Math.ceil(
-      (parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000
-    ),
-  },
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
+  headers: true,
+  handler: handleRateLimitError
 });
+app.use(limiter);
 
-app.use("/api", limiter);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ============================================================================
-// GENERAL MIDDLEWARE
-// ============================================================================
+// ======================
+// Session & Authentication
+// ======================
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000
+  },
+  name: 'sessionId',
+  proxy: process.env.NODE_ENV === 'production'
+}));
 
-// Body parsing middleware
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
-// Request logging
-app.use(requestLogger);
-
-// Static files
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// ============================================================================
-// HEALTH CHECK
-// ============================================================================
-
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV,
-    version: "1.0.0",
-  });
-});
-
-// ============================================================================
-// API ROUTES
-// ============================================================================
-
-// Initialize passport for OAuth
 app.use(passport.initialize());
+app.use(passport.session());
 
-// Auth Routes
-app.use("/api/auth", authRoutes);
-// User Routes
-app.use("/api/users", usersRoutes);
-// Course Routes
-app.use("/api/courses", coursesRoutes);
-// Module Routes
-app.use("/api/modules", modulesRoutes);
-// Lesson Routes
-app.use("/api/lessons", lessonsRoutes);
-// Quiz Routes
-app.use("/api/quizzes", quizzesRoutes);
-// Quiz Attempt Routes
-app.use("/api/quiz-attempts", quizAttemptRoutes);
-// Assignment Routes
-app.use("/api/assignments", assignmentsRoutes);
-// Enrollment Routes
-app.use("/api/enrollments", enrollmentsRoutes);
-// Category Routes
-app.use("/api/categories", categoryRoutes);
-// Analytics Routes
-app.use("/api/analytics", analyticsRoutes);
-// Assignment Submission Routes
-app.use("/api/assignment-submissions", assignmentSubmissionRoutes);
+// ======================
+// Logging
+// ======================
+const requestLogger = (req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const responseTime = Date.now() - start;
+    logHttpRequest(req, res, responseTime);
+  });
+  next();
+};
 
-// ============================================================================
-// ERROR HANDLING
-// ============================================================================
 
-// 404 handler
-app.use(notFoundHandler);
+const handleOAuthError = (error) => {
+  console.error('OAuth failed:', error);
+  // Show user-friendly error, don't auto-retry
+  setAuthError('Login failed. Please try again.');
+  // Don't automatically redirect back to OAuth
+};
 
-// Global error handler
+
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined'));
+} else {
+  app.use(requestLogger);
+}
+
+// ======================
+// Health Check
+// ======================
+app.get("/api/health", (_, res) => res.status(200).json({ status: "ok", timestamp: new Date().toISOString() }));
+
+// ======================
+// Routes
+// ======================
+app.use("/api", routes);
+
+// ======================
+// Error Handling
+// ======================
+app.use(notFound);
 app.use(errorHandler);
-
-// ============================================================================
-// EXPORT APP
-// ============================================================================
 
 export default app;
